@@ -12,7 +12,10 @@ import (
 // Mail contains the information related to email.
 type Mail struct {
 	SenderID string
+	Password string
 	ToIds    []string
+	CcIds    []string
+	BccIds   []string
 	Subject  string
 	Body     string
 }
@@ -28,10 +31,18 @@ func (s *SMTPServer) serverName() string {
 }
 
 func (mail *Mail) buildMessage() string {
+	mime := "1.0;"
+	contenType := "text/html; charset=\"UTF-8\";"
 	message := ""
+	message += fmt.Sprintf("MIME-version: %s\r\n", mime)
+	message += fmt.Sprintf("Content-Type: %s\r\n", contenType)
 	message += fmt.Sprintf("From: %s\r\n", mail.SenderID)
+
 	if len(mail.ToIds) > 0 {
 		message += fmt.Sprintf("To: %s\r\n", strings.Join(mail.ToIds, ";"))
+	}
+	if len(mail.CcIds) > 0 {
+		message += fmt.Sprintf("Cc: %s\r\n", strings.Join(mail.CcIds, ";"))
 	}
 
 	message += fmt.Sprintf("Subject: %s\r\n", mail.Subject)
@@ -44,9 +55,8 @@ func (mail *Mail) buildMessage() string {
 func Send(mail Mail, smtpServer SMTPServer) {
 	messageBody := mail.buildMessage()
 
-	log.Println(smtpServer.Host)
 	//build an auth
-	auth := smtp.PlainAuth("", mail.SenderID, "password", smtpServer.Host)
+	auth := smtp.PlainAuth("", mail.SenderID, mail.Password, smtpServer.Host)
 
 	// Gmail will reject connection if it's not secure
 	// TLS config
@@ -74,7 +84,16 @@ func Send(mail Mail, smtpServer SMTPServer) {
 	if err = client.Mail(mail.SenderID); err != nil {
 		log.Panic(err)
 	}
-	for _, k := range mail.ToIds {
+	// for _, k := range mail.ToIds {
+	// 	if err = client.Rcpt(k); err != nil {
+	// 		log.Panic(err)
+	// 	}
+	// }
+
+	receivers := append(mail.ToIds, mail.CcIds...)
+	receivers = append(receivers, mail.BccIds...)
+	for _, k := range receivers {
+		log.Println("sending to: ", k)
 		if err = client.Rcpt(k); err != nil {
 			log.Panic(err)
 		}
